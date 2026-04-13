@@ -5,9 +5,10 @@ main = "src/index.ts"
 [observability]
 enabled = true
 
+# REPLACE THE ID BELOW WITH YOUR KV NAMESPACE ID FROM CLOUDFLARE DASHBOARD
 [[kv_namespaces]]
 binding = "CLAWPPY_KV"
-id = "YOUR_KV_NAMESPACE_ID_HERE"  # <-- REPLACE THIS WITH YOUR KV ID
+id = "YOUR_KV_NAMESPACE_ID_HERE"
 
 [env.production]
 vars = { ENVIRONMENT = "production" }
