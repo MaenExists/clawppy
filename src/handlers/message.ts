@@ -390,27 +390,30 @@ async function handleGraphResponse(user: UserState, message: string, env: Env): 
   user.currentTopic = null; // Will be set when user chooses
   user.learningPlan = user.learningPlan || [];
   
-  // Add default topics to plan if empty
+  // Add default topics to plan if empty (based on syllabus)
   if (user.learningPlan.length === 0) {
-    user.learningPlan = [
-      { topic: "Algebra", priority: "high", reason: "Foundation for all math" },
-      { topic: "Number Systems", priority: "high", reason: "Essential for higher math" },
-      { topic: "Geometry", priority: "medium", reason: "Visual thinking" },
-      { topic: "Statistics", priority: "medium", reason: "Data analysis skills" },
-      { topic: "Probability", priority: "medium", reason: "Real-world applications" }
-    ];
+    const topics = getTopicsForSyllabus(user.syllabus);
+    const topTopics = Object.entries(topics).slice(0, 5);
+    user.learningPlan = topTopics.map(([k, v]) => ({
+      topic: v,
+      priority: k === "1" ? "high" : k === "2" ? "high" : "medium",
+      reason: "Essential for your syllabus"
+    }));
   }
   
   await saveUser(user, env);
   
-  // Ask user what they want to learn
-  return `Great! Let's start learning! 🎯\n\nBased on your assessment, here are topics we can cover:\n\n1. 📐 Algebra - Equations, expressions & problem solving\n2. 🔢 Number Systems - Real & imaginary numbers\n3. 📐 Geometry - Shapes, angles & proof writing\n4. 📊 Statistics - Data handling & analysis\n5. 🎲 Probability - Chance & likelihood\n\nWhat would you like to learn first?\n\nJust reply with the number (1-5) or the topic name!`;
+  // Get topic list based on syllabus
+  const topics = getTopicsForSyllabus(user.syllabus);
+  const topicList = Object.entries(topics).slice(0, 5).map(([k, v]) => `${k}. ${v}`).join("\n");
+  
+  return `Great! Let's start learning! 🎯\n\nBased on your ${user.syllabus || "CBSE"} syllabus, here are topics we can cover:\n\n${topicList}\n\nWhat would you like to learn first?\n\nJust reply with the number or the topic name!`;
 }
 
 // ============== TOPIC SELECTION ==============
 
 // CBSE Class 11 Math topics mapping
-const CBSE_CLASS_11_TOPICS: Record<string, string[]> = {
+const CBSE_CLASS_11_TOPICS: Record<string, string> = {
   "1": "Algebra",
   "2": "Number Systems",
   "3": "Geometry",
@@ -431,19 +434,60 @@ const CBSE_CLASS_11_TOPICS: Record<string, string[]> = {
   "sequences": "Sequences & Series"
 };
 
+// CBSE Class 11 Science topics
+const CBSE_CLASS_11_SCIENCE_TOPICS: Record<string, string> = {
+  "1": "Physics - Motion",
+  "2": "Physics - Laws of Motion",
+  "3": "Physics - Work & Energy",
+  "4": "Chemistry - States of Matter",
+  "5": "Chemistry - Chemical Bonding",
+  "6": "Chemistry - Thermodynamics",
+  "7": "Biology - Cell Structure",
+  "8": "Biology - Cell Division",
+  "9": "Biology - Nutrition",
+  "10": "Biology - Respiration"
+};
+
+// NEET/JEE topics  
+const NEET_JEE_TOPICS: Record<string, string> = {
+  "1": "JEE - Calculus",
+  "2": "JEE - Coordinate Geometry",
+  "3": "JEE - Complex Numbers",
+  "4": "NEET - Human Anatomy",
+  "5": "NEET - Plant Diversity",
+  "6": "NEET - Body Fluids",
+  "7": "JEE - Thermodynamics",
+  "8": "NEET - Ecology"
+};
+
+// Get topics based on syllabus
+function getTopicsForSyllabus(syllabus: string | undefined): Record<string, string> {
+  if (!syllabus) return CBSE_CLASS_11_TOPICS;
+  
+  const lower = syllabus.toLowerCase();
+  if (lower.includes("science")) return CBSE_CLASS_11_SCIENCE_TOPICS;
+  if (lower.includes("neet") || lower.includes("jee")) return NEET_JEE_TOPICS;
+  
+  // Default to Math topics
+  return CBSE_CLASS_11_TOPICS;
+}
+
 async function handleTopicSelection(user: UserState, message: string, env: Env): Promise<string> {
   const lower = message.toLowerCase().trim();
+  
+  // Get topics based on syllabus
+  const topics = getTopicsForSyllabus(user.syllabus);
   
   // Try to match a topic from the message
   let selectedTopic: string | null = null;
   
   // Check for number input
-  if (CBSE_CLASS_11_TOPICS[lower]) {
-    selectedTopic = CBSE_CLASS_11_TOPICS[lower];
+  if (topics[lower]) {
+    selectedTopic = topics[lower];
   }
   
   // Check if they typed the topic name
-  for (const [key, topic] of Object.entries(CBSE_CLASS_11_TOPICS)) {
+  for (const [key, topic] of Object.entries(topics)) {
     if (lower.includes(key) && key.length > 2) {
       selectedTopic = topic;
       break;
@@ -462,7 +506,8 @@ async function handleTopicSelection(user: UserState, message: string, env: Env):
   
   // If still no match, ask again
   if (!selectedTopic) {
-    return `I didn't catch that. Which topic would you like to learn?\n\nReply with:\n1. Algebra\n2. Number Systems\n3. Geometry\n4. Statistics\n5. Probability\n\nOr just say the topic name!`;
+    const topicList = Object.entries(topics).slice(0, 5).map(([k, v]) => `${k}. ${v}`).join("\n");
+    return `I didn't catch that. Which topic would you like to learn?\n\n${topicList}\n\nOr just say the topic name!`;
   }
   
   // Topic selected - start teaching
