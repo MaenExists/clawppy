@@ -7,10 +7,11 @@ enabled = true
 
 [[kv_namespaces]]
 binding = "CLAWPPY_KV"
-id = "YOUR_KV_NAMESPACE_ID_HERE"
+id = "YOUR_KV_NAMESPACE_ID_HERE"  # <-- REPLACE THIS WITH YOUR KV ID
 
 [env.production]
 vars = { ENVIRONMENT = "production" }
 
-# Note: Set OPENCODE_API_KEY in Cloudflare Dashboard or via CLI
+# Secrets - set via CLI (DO NOT commit to repo):
 # wrangler secret put OPENCODE_API_KEY
+# (API key stored in .env file for local dev only)
