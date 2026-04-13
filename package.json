@@ -1,0 +1,19 @@
+{
+  "name": "clawppy",
+  "version": "1.0.0",
+  "description": "AI WhatsApp Tutor for Indian Students",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "wrangler types && tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["whatsapp", "ai", "tutor", "education"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260413.1",
+    "wrangler": "^4.82.0"
+  }
+}
