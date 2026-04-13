@@ -6,22 +6,45 @@ export interface UserState {
   streak: number;
   lastActiveDate: string;
   isPro: boolean;
+  syllabus?: string;  // CBSE Class 9-12, stored permanently after selection
   currentTopic: string | null;
   teachingPhase: TeachingPhase;
   conversationHistory: ConversationEntry[];
+  assessmentData?: AssessmentData;
+  assessmentResults?: AssessmentResult;
+  learningPlan?: LearningPlanItem[];
 }
 
 export type TeachingPhase = 
   | "idle"
-  | "awaiting_topic"
-  | "assessing_prior_knowledge"
+  | "awaiting_syllabus_selection"
+  | "assessment_intro"
+  | "assessing"
+  | "showing_graph"
+  | "awaiting_topic_selection"  // NEW: user chooses topic to learn
   | "teaching"
-  | "awaiting_confidence_rating"
-  | "quiz"
-  | "awaiting_quiz_answer"
   | "feynman_challenge"
-  | "awaiting_feynman"
-  | "false_confidence_check";
+  | "awaiting_continue";
+
+export interface AssessmentData {
+  questionsAsked: number;
+  answers: string[];
+  topic: string;
+}
+
+export interface AssessmentResult {
+  actualKnown: number;       // What they actually know
+  falseConfidence: number;   // Think they know but don't
+  unknownAware: number;      // Know they don't know
+  blindSpots: number;        // Don't know they don't know
+}
+
+export interface LearningPlanItem {
+  topic: string;
+  priority: "high" | "medium" | "low";
+  reason?: string;
+  completed?: boolean;
+}
 
 // Topic mastery stored per user
 export interface TopicMastery {
@@ -64,23 +87,26 @@ export interface TwilioWebhookBody {
   AccountSid: string;
 }
 
-export interface GeminiRequest {
-  contents: Array<{
-    parts: Array<{ text: string }>;
-  >>;
-  generationConfig?: {
-    temperature?: number;
-    maxOutputTokens?: number;
-  };
+export interface OpenCodeMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
 }
 
-export interface GeminiResponse {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{ text: string }>;
+export interface OpenCodeRequest {
+  model: string;
+  messages: OpenCodeMessage[];
+  temperature?: number;
+  max_tokens?: number;
+}
+
+export interface OpenCodeResponse {
+  choices?: Array<{
+    message: {
+      content: string;
     };
   }>;
   error?: {
+    type: string;
     message: string;
   };
 }
