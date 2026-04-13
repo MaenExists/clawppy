@@ -10,10 +10,17 @@
 
 ### 2. Core Features Implemented
 
-#### Onboarding Flow ✅
+#### Onboarding Flow ✅ ✅
 - Introduction message with CBSE syllabus options (Class 9-12)
 - Syllabus selection stored permanently in user state
 - Confirmation message after selection
+- Support for Science, NEET/JEE syllabi
+
+#### Topic Selection ✅
+- Dynamic topics based on syllabus
+- Math topics (Class 11): Algebra, Number Systems, Geometry, etc.
+- Science topics: Physics, Chemistry, Biology
+- NEET/JEE topics: Subject-specific
 
 #### Assessment System ✅
 - Interactive assessment with probing questions (not multiple choice)
@@ -124,6 +131,7 @@
 - [ ] Deploy via `wrangler deploy`
 - [ ] Set secrets via `wrangler secret put OPENCODE_API_KEY`
 - [ ] Configure Twilio webhook to production URL
+- [ ] **Add fallback teaching content** (for when AI API fails) - TBD after core features
 
 #### 5.2 Error Handling & Logging
 - [ ] Add proper error logging

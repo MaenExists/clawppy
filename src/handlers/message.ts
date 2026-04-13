@@ -515,35 +515,13 @@ async function handleTopicSelection(user: UserState, message: string, env: Env):
   user.teachingPhase = "teaching";
   await saveUser(user, env);
   
-  try {
-    const teaching = await callAI(
-      buildTeachingPrompt(selectedTopic, "Introduction", [], 30),
-      env,
-      0.7
-    );
-    return `Let's learn ${selectedTopic}! 🎯\n\n${teaching}\n\nWhen you're ready, try to explain it back to me in simple terms - like you're teaching a 5-year-old!`;
-  } catch (e) {
-    // Fallback teaching content
-    return startTeachingFallback(selectedTopic);
-  }
-}
-
-function startTeachingFallback(topic: string): string {
-  const topics: Record<string, string> = {
-    "Algebra": `Let's learn ALGEBRA! 💡\n\nThink of algebra like this: In arithmetic, we work with known numbers (like 2 + 3 = 5). In algebra, we work with UNKNOWN numbers too - we just use letters!\n\n**The KEY idea:** Letters (like x, y) are just boxes that hold a number.\n\n**Example:** If x + 5 = 10, then x is the box that holds 5 (because 5 + 5 = 10).\n\n**Mental model:** Think of x like a box 📦 - you don't know what's inside yet, but you can figure it out!\n\nNow try explaining this to a 5-year-old!`,
-    
-    "Number Systems": `Let's learn NUMBER SYSTEMS! 🔢\n\nYou already know natural numbers (1,2,3...), whole numbers (add 0), integers (add negatives).\n\n**The NEW stuff:** Rational numbers (fractions), irrational numbers (like √2 = 1.414... never ends!).\n\n**Real numbers:** ALL numbers on the number line = rational + irrational.\n\n**Mental model:** Think of the number line as a street. Every number lives somewhere on this street!\n\nTry explaining this simply!`,
-    
-    "Geometry": `Let's learn GEOMETRY! 📐\n\nGeometry is about SHAPES and their PROPERTIES - not memorizing formulas, but understanding WHY.\n\n**Key idea:** All shapes follow rules. A triangle has 3 angles that always add up to 180°. A quadrilateral (4 sides) always adds to 360°.\n\n**Mental model:** Think of shapes like families - they have rules that every member follows!\n\nTry explaining this to a 5-year-old!`,
-    
-    "Statistics": `Let's learn STATISTICS! 📊\n\nStatistics is about making sense of DATA - turning numbers into understanding.\n\n**Key terms:**\n- Mean = average (sum ÷ count)\n- Median = middle value\n- Mode = most common\n\n**Mental model:** If you have test scores, statistics tells you how you actually did, not just one number!\n\nTry explaining this simply!`,
-    
-    "Probability": `Let's learn PROBABILITY! 🎲\n\nProbability is about CHANCE - how likely something is to happen.\n\n**Scale:** 0 = impossible, 1 = certain, 0.5 = 50-50\n\n**Formula:** P(event) = favorable outcomes ÷ total outcomes\n\n**Example:** Coin toss - 2 outcomes, 1 favorable (heads) = 1/2 = 0.5 = 50%\n\n**Mental model:** Probability is just a way to measure how surprised you should be!\n\nTry explaining this to a 5-year-old!`
-  };
-  
-  const content = topics[topic] || `Let's learn ${topic}! 🎯\n\nI'll teach you this topic step by step. First, let me explain the basic concept...`;
-  
-  return `${content}\n\nWhen you understand it, explain it back to me in simple terms!`;
+  // AI generates the teaching content
+  const teaching = await callAI(
+    buildTeachingPrompt(selectedTopic, "Introduction", [], 30),
+    env,
+    0.7
+  );
+  return `Let's learn ${selectedTopic}! 🎯\n\n${teaching}\n\nWhen you're ready, try to explain it back to me in simple terms - like you're teaching a 5-year-old!`;
 }
 
 // ============== TEACHING ==============
