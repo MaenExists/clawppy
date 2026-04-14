@@ -96,7 +96,7 @@
 - [ ] Streak display in responses
 
 #### 3.2 Interactive Buttons
-- [ ] Add Twilio interactive buttons for:
+- [ ] Add Meta WhatsApp interactive buttons for:
   - Continue/Review/Practice/Progress options
   - Topic selection
   - Yes/No confirmations
@@ -130,7 +130,7 @@
 - [ ] Create real KV namespace in Cloudflare
 - [ ] Deploy via `wrangler deploy`
 - [ ] Set secrets via `wrangler secret put OPENCODE_API_KEY`
-- [ ] Configure Twilio webhook to production URL
+- [ ] Configure Meta Webhook to production URL
 - [ ] **Add fallback teaching content** (for when AI API fails) - TBD after core features
 
 #### 5.2 Error Handling & Logging

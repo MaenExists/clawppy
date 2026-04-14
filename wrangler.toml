@@ -2,13 +2,11 @@ name = "clawppy"
 compatibility_date = "2024-12-18"
 main = "src/index.ts"
 
-[observability]
-enabled = true
+workers_dev = true
 
-# REPLACE THE ID BELOW WITH YOUR KV NAMESPACE ID FROM CLOUDFLARE DASHBOARD
 [[kv_namespaces]]
 binding = "CLAWPPY_KV"
-id = "YOUR_KV_NAMESPACE_ID_HERE"
+id = "cb6817fdd7d74edcb757601ddb137684"
 
 [env.production]
 vars = { ENVIRONMENT = "production" }

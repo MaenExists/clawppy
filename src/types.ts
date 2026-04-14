@@ -110,3 +110,21 @@ export interface OpenCodeResponse {
     message: string;
   };
 }
+
+export interface MetaInteractiveMessage {
+  type: "button" | "list";
+  header?: { type: "text"; text: string };
+  body: { text: string };
+  footer?: { text: string };
+  action: {
+    buttons?: Array<{
+      type: "reply";
+      reply: { id: string; title: string };
+    }>;
+    button?: string;
+    sections?: Array<{
+      title?: string;
+      rows: Array<{ id: string; title: string; description?: string }>;
+    }>;
+  };
+}

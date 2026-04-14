@@ -1,4 +1,4 @@
-import { Env, UserState, TeachingPhase, AssessmentResult, TopicMastery } from "../types";
+import { Env, UserState, TeachingPhase, AssessmentResult, TopicMastery, MetaInteractiveMessage } from "../types";
 import { getOrCreateUser, updateStreak, saveUser, getTopicMastery, saveTopicMastery, getAllTopics, calculateNextReview, determineMasteryStatus } from "../utils/kv";
 import { 
   callAI, 
@@ -17,7 +17,7 @@ export async function processMessage(
   from: string,
   profileName: string,
   env: Env
-): Promise<string> {
+): Promise<string | MetaInteractiveMessage> {
   const user = await getOrCreateUser(from, profileName, env);
   await updateStreak(user, env);
   
@@ -171,7 +171,7 @@ async function handleReset(user: UserState, env: Env): Promise<string> {
 
 // ============== ONBOARDING ==============
 
-async function handleOnboarding(user: UserState, message: string, env: Env): Promise<string> {
+async function handleOnboarding(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   // First message - send introduction
   const lowerMessage = message.toLowerCase().trim();
   
@@ -181,8 +181,36 @@ async function handleOnboarding(user: UserState, message: string, env: Env): Pro
     
     try {
       const intro = await callAI(buildIntroPrompt(user.name), env, 0.8);
-      const options = await callAI(buildSyllabusOptionsPrompt(), env, 0.5);
-      return `${intro}\n\n${options}`;
+      
+      // Use Meta List for syllabus selection
+      const listMessage: MetaInteractiveMessage = {
+        type: "list",
+        header: { type: "text", text: "Select your Syllabus" },
+        body: { text: intro },
+        footer: { text: "Clawppy Learning System" },
+        action: {
+          button: "Select Class",
+          sections: [
+            {
+              title: "CBSE Classes",
+              rows: [
+                { id: "s1", title: "CBSE Class 9" },
+                { id: "s2", title: "CBSE Class 10" },
+                { id: "s3", title: "CBSE Class 11" },
+                { id: "s4", title: "CBSE Class 12" }
+              ]
+            },
+            {
+              title: "Entrance Exams",
+              rows: [
+                { id: "s5", title: "NEET Prep" },
+                { id: "s6", title: "JEE Prep" }
+              ]
+            }
+          ]
+        }
+      };
+      return listMessage;
     } catch (e) {
       // Fallback if API fails - should not happen with real API
       return `Hi! I'm Clawppy, your AI study buddy 📚
@@ -201,24 +229,11 @@ Select your class:
   return "Say 'hi' to get started!";
 }
 
-async function handleSyllabusSelection(user: UserState, message: string, env: Env): Promise<string> {
+async function handleSyllabusSelection(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   const choice = message.trim();
   
-  const syllabusOptions: Record<string, string> = {
-    "1": "CBSE Class 9",
-    "2": "CBSE Class 10",
-    "3": "CBSE Class 11",
-    "4": "CBSE Class 12",
-    "5": "NEET/JEE Prep",
-    "6": "CBSE Class 11 Science",
-    "7": "CBSE Class 12 Science",
-    "9": "CBSE Class 9",
-    "10": "CBSE Class 10",
-    "11": "CBSE Class 11",
-    "12": "CBSE Class 12"
-  };
-  
-  const syllabus = syllabusOptions[choice] || choice;
+  // Choice can be title of button/list row
+  const syllabus = choice;
   
   // Store syllabus permanently
   user.syllabus = syllabus;
@@ -230,27 +245,30 @@ async function handleSyllabusSelection(user: UserState, message: string, env: En
 1. Confirms "${syllabus}" is saved
 2. Explains what assessment will do (understand what they know, don't know, think they know)
 3. Says it will take 5-10 minutes
-4. Asks if they're ready to start
-5. Keep it under 80 words, friendly tone`, env, 0.7);
-    return planMsg;
+4. Keep it under 60 words`, env, 0.7);
+
+    const buttonMessage: MetaInteractiveMessage = {
+      type: "button",
+      body: { text: planMsg },
+      action: {
+        buttons: [
+          { type: "reply", reply: { id: "start_assessment", title: "Yes, I'm ready!" } },
+          { type: "reply", reply: { id: "later", title: "Not now" } }
+        ]
+      }
+    };
+    return buttonMessage;
   } catch (e) {
-    return `Great! ${syllabus} saved! 🎉
-
-Now I'll understand where you stand. I'll ask you some questions to figure out:
-- What you actually know
-- What you think you know but don't
-- What you don't know
-
-This takes 5-10 minutes. Ready? Reply "yes" to start!`;
+    return `Great! ${syllabus} saved! 🎉 Ready to start the assessment? Reply "yes"!`;
   }
 }
 
 // ============== ASSESSMENT ==============
 
-async function handleAssessmentIntro(user: UserState, message: string, env: Env): Promise<string> {
+async function handleAssessmentIntro(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   const lower = message.toLowerCase().trim();
   
-  if (lower !== "yes" && lower !== "start" && lower !== "ready") {
+  if (lower !== "yes" && lower !== "start" && lower !== "ready" && lower !== "yes, i'm ready!") {
     return "Just say 'yes' or 'start' when you're ready to begin!";
   }
   
@@ -275,7 +293,7 @@ async function handleAssessmentIntro(user: UserState, message: string, env: Env)
   }
 }
 
-async function handleAssessment(user: UserState, message: string, env: Env): Promise<string> {
+async function handleAssessment(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   if (!user.assessmentData) {
     user.teachingPhase = "assessment_intro";
     await saveUser(user, env);
@@ -290,14 +308,38 @@ async function handleAssessment(user: UserState, message: string, env: Env): Pro
   
   // After 5 questions, show results and graph
   if (questionCount >= 5) {
-    // Calculate assessment results based on answers
-    user.assessmentResults = calculateAssessmentResults(user.assessmentData.answers);
+    // Calculate assessment results using AI for real analysis
+    let results: AssessmentResult;
+    try {
+      const analysisJson = await callAI(buildAssessmentAnalysisPrompt(user.assessmentData.answers), env, 0.3);
+      const analysis = JSON.parse(analysisJson);
+      results = {
+        actualKnown: analysis.actualKnown,
+        falseConfidence: analysis.falseConfidence,
+        unknownAware: analysis.unknownAware,
+        blindSpots: analysis.blindSpots
+      };
+      
+      // Update learning plan with gaps found
+      if (analysis.topGaps) {
+        user.learningPlan = analysis.topGaps.map((gap: string) => ({
+          topic: gap,
+          priority: "high",
+          reason: "Identified as a critical gap during assessment"
+        }));
+      }
+    } catch (e) {
+      console.error("AI Analysis failed, falling back to simple algo:", e);
+      results = calculateAssessmentResults(user.assessmentData.answers);
+    }
+    
+    user.assessmentResults = results;
     user.teachingPhase = "showing_graph";
     await saveUser(user, env);
     
     try {
       const graph = await callAI(buildGraphPrompt(user.assessmentResults), env, 0.5);
-      const plan = await callAI(buildLearningPlanPrompt(user.assessmentResults, "Current Topic"), env, 0.7);
+      const plan = await callAI(buildLearningPlanPrompt(user.assessmentResults, user.assessmentData.topic), env, 0.7);
       return `${graph}\n\n${plan}\n\nShall we start learning? Reply "yes" to begin!`;
     } catch (e) {
       return formatAssessmentResults(user.assessmentResults);
@@ -378,10 +420,10 @@ function formatAssessmentResults(ar: AssessmentResult): string {
 Ready to start learning? Reply "yes"!`;
 }
 
-async function handleGraphResponse(user: UserState, message: string, env: Env): Promise<string> {
+async function handleGraphResponse(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   const lower = message.toLowerCase().trim();
   
-  if (lower !== "yes" && lower !== "start" && lower !== "continue") {
+  if (lower !== "yes" && lower !== "start" && lower !== "continue" && !lower.includes("ready")) {
     return "Just say 'yes' or 'start' to begin learning!";
   }
   
@@ -405,9 +447,26 @@ async function handleGraphResponse(user: UserState, message: string, env: Env): 
   
   // Get topic list based on syllabus
   const topics = getTopicsForSyllabus(user.syllabus);
-  const topicList = Object.entries(topics).slice(0, 5).map(([k, v]) => `${k}. ${v}`).join("\n");
   
-  return `Great! Let's start learning! 🎯\n\nBased on your ${user.syllabus || "CBSE"} syllabus, here are topics we can cover:\n\n${topicList}\n\nWhat would you like to learn first?\n\nJust reply with the number or the topic name!`;
+  const listMessage: MetaInteractiveMessage = {
+    type: "list",
+    header: { type: "text", text: "Choose a Topic" },
+    body: { text: `Great! Let's start learning! 🎯\n\nBased on your ${user.syllabus || "CBSE"} syllabus, here are the top topics recommended for you:` },
+    action: {
+      button: "Select Topic",
+      sections: [
+        {
+          title: "Recommended Topics",
+          rows: Object.entries(topics).slice(0, 10).map(([k, v]) => ({
+            id: `topic_${k}`,
+            title: v
+          }))
+        }
+      ]
+    }
+  };
+  
+  return listMessage;
 }
 
 // ============== TOPIC SELECTION ==============
@@ -472,7 +531,7 @@ function getTopicsForSyllabus(syllabus: string | undefined): Record<string, stri
   return CBSE_CLASS_11_TOPICS;
 }
 
-async function handleTopicSelection(user: UserState, message: string, env: Env): Promise<string> {
+async function handleTopicSelection(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   const lower = message.toLowerCase().trim();
   
   // Get topics based on syllabus
@@ -526,7 +585,7 @@ async function handleTopicSelection(user: UserState, message: string, env: Env):
 
 // ============== TEACHING ==============
 
-async function handleTeaching(user: UserState, message: string, env: Env): Promise<string> {
+async function handleTeaching(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   // User responded to teaching - move to Feynman
   user.teachingPhase = "feynman_challenge";
   await saveUser(user, env);
@@ -552,7 +611,18 @@ async function handleTeaching(user: UserState, message: string, env: Env): Promi
       user.currentTopic = null;
       await saveUser(user, env);
       
-      return `✅ Great job! Score: ${result.score}%\n\n${result.feedback}\n\nYou're ready for the next topic! What would you like to learn next?\n\n1. Next topic\n2. Review\n3. Practice\n4. Progress`;
+      const buttonMessage: MetaInteractiveMessage = {
+        type: "button",
+        body: { text: `✅ Great job! Score: ${result.score}%\n\n${result.feedback}\n\nYou're ready for the next topic!` },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "next_topic", title: "Next Topic" } },
+            { type: "reply", reply: { id: "practice", title: "Practice" } },
+            { type: "reply", reply: { id: "progress", title: "Progress" } }
+          ]
+        }
+      };
+      return buttonMessage;
     } else {
       // Continue teaching to fix gaps
       user.teachingPhase = "teaching";
@@ -572,7 +642,7 @@ async function handleTeaching(user: UserState, message: string, env: Env): Promi
 
 // ============== FEYNMAN ==============
 
-async function handleFeynman(user: UserState, message: string, env: Env): Promise<string> {
+async function handleFeynman(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   // Evaluate Feynman response
   try {
     const result = await callAI(
@@ -604,7 +674,18 @@ async function handleFeynman(user: UserState, message: string, env: Env): Promis
       user.currentTopic = null;
       await saveUser(user, env);
       
-      return `✅ Excellent! Score: ${evaluation.score}%\n\n${evaluation.feedback}\n\n🎉 Great progress! What's next?\n1. Continue to next topic\n2. Review what we learned\n3. Practice questions\n4. Check your progress (/map)`;
+      const buttonMessage: MetaInteractiveMessage = {
+        type: "button",
+        body: { text: `✅ Excellent! Score: ${evaluation.score}%\n\n${evaluation.feedback}\n\n🎉 Great progress! What's next?` },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "cont_topic", title: "Next Topic" } },
+            { type: "reply", reply: { id: "cont_practice", title: "Practice" } },
+            { type: "reply", reply: { id: "cont_progress", title: "Progress" } }
+          ]
+        }
+      };
+      return buttonMessage;
     } else {
       // Continue teaching the gap
       user.teachingPhase = "teaching";
@@ -617,15 +698,11 @@ async function handleFeynman(user: UserState, message: string, env: Env): Promis
     user.teachingPhase = "awaiting_continue";
     await saveUser(user, env);
     
-    return `Good try! Let's continue learning.\n\nWhat's next?
-1. Next topic
-2. Review
-3. Practice
-4. Check progress`;
+    return `Good try! Let's continue learning.\n\nWhat's next?\n1. Next topic\n2. Review\n3. Practice\n4. Check progress`;
   }
 }
 
-async function handleContinueChoice(user: UserState, message: string, env: Env): Promise<string> {
+async function handleContinueChoice(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   const lower = message.toLowerCase().trim();
   
   // If they try to explain a topic, treat it as a Feynman attempt
@@ -642,28 +719,59 @@ async function handleContinueChoice(user: UserState, message: string, env: Env):
     user.currentTopic = null;
     await saveUser(user, env);
     
-    return `Great! Pick your next topic:\n\n1. 📐 Algebra\n2. 🔢 Number Systems\n3. 📐 Geometry\n4. 📊 Statistics\n5. 🎲 Probability\n\nJust reply with 1-5 or the topic name!`;
+    // Get topics based on syllabus
+    const topics = getTopicsForSyllabus(user.syllabus);
+    
+    const listMessage: MetaInteractiveMessage = {
+      type: "list",
+      header: { type: "text", text: "Next Step" },
+      body: { text: "Great! What would you like to learn next?" },
+      action: {
+        button: "Select Topic",
+        sections: [
+          {
+            title: "Available Topics",
+            rows: Object.entries(topics).slice(0, 10).map(([k, v]) => ({
+              id: `next_${k}`,
+              title: v
+            }))
+          }
+        ]
+      }
+    };
+    return listMessage;
   }
   
   if (lower.includes("2") || lower.includes("review")) {
-    return "You learned Algebra - the basics of using letters to represent unknown numbers (like x + 5 = 10, find x)";
+    return "You learned about the concept - now let's apply it!";
   }
   
   if (lower.includes("3") || lower.includes("practice")) {
-    return "Here's a practice question:\n\nIf 3x + 7 = 22, what is x?\n\nHint: First subtract 7 from both sides!\n\nReply with your answer!";
+    return "Here's a practice question for you to solve!";
   }
   
   if (lower.includes("4") || lower.includes("map") || lower.includes("progress") || lower.includes(" /")) {
     return await handleKnowledgeMap(user, env);
   }
   
-  // Default - ask them to choose
-  return `Just reply with 1, 2, 3, or 4:\n\n1. Next topic\n2. Review\n3. Practice\n4. Progress`;
+  // Default - ask them to choose using buttons
+  const buttonMessage: MetaInteractiveMessage = {
+    type: "button",
+    body: { text: "What would you like to do next?" },
+    action: {
+      buttons: [
+        { type: "reply", reply: { id: "cont_next", title: "Next Topic" } },
+        { type: "reply", reply: { id: "cont_practice", title: "Practice" } },
+        { type: "reply", reply: { id: "cont_map", title: "Check Progress" } }
+      ]
+    }
+  };
+  return buttonMessage;
 }
 
 // ============== IDLE STATE ==============
 
-async function handleIdle(user: UserState, message: string, env: Env): Promise<string> {
+async function handleIdle(user: UserState, message: string, env: Env): Promise<string | MetaInteractiveMessage> {
   const lower = message.toLowerCase().trim();
   
   // Check if returning user with active plan

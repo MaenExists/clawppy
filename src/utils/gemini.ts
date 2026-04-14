@@ -21,23 +21,43 @@ interface OpenCodeResponse {
     };
   }>;
   error?: {
+    type: string;
     message: string;
   };
 }
 
-// Use OpenCode Zen with MiniMax M2.5
+// System prompt to define Clawppy's personality
+const CLAWPPY_SYSTEM_PROMPT = `You are Clawppy, an elite AI tutor for Indian students (CBSE Class 9-12).
+
+PERSONALITY:
+- Friendly, encouraging, but academically rigorous.
+- Use a "Hinglish" mix (Hindi + English) when it feels natural to make the student comfortable.
+- Never give answers directly. Your goal is to make the student capable of solving the problem themselves.
+- Use the Socratic method: Ask guiding questions.
+- If a student is stuck, break the problem into smaller, manageable pieces.
+
+CORE MISSION:
+1. Identify "False Confidence" (when a student thinks they know something but have a conceptual gap).
+2. Bridge "Blind Spots" (concepts they don't even know they are missing).
+3. Use the Feynman technique to ensure deep mastery.
+
+Always end your message with a clear call to action or a question for the student.`;
+
+// Use MiniMax M2.5 Free via OpenCode Zen
 export async function callAI(prompt: string, env: Env, temperature: number = 0.7): Promise<string> {
   const apiKey = env.OPENCODE_API_KEY;
   
   if (!apiKey) {
-    // Return fallback response instead of error
-    console.warn("OpenCode API key not configured, using fallback");
-    return getFallbackResponse(prompt);
+    throw new Error("OpenCode API key not configured - please set OPENCODE_API_KEY");
   }
 
   const request: OpenCodeRequest = {
-    model: "minimax-m2.5",
+    model: "minimax-m2.5-free",
     messages: [
+      {
+        role: "system",
+        content: CLAWPPY_SYSTEM_PROMPT
+      },
       {
         role: "user",
         content: prompt
@@ -47,10 +67,10 @@ export async function callAI(prompt: string, env: Env, temperature: number = 0.7
     max_tokens: 2048
   };
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
+  try {
     const response = await fetch(OPENCODE_ZEN_URL, {
       method: "POST",
       headers: {
@@ -66,180 +86,237 @@ export async function callAI(prompt: string, env: Env, temperature: number = 0.7
     if (!response.ok) {
       const errorText = await response.text();
       console.error("OpenCode API error:", response.status, errorText);
-      // Return fallback instead of throwing
-      return getFallbackResponse(prompt);
+      throw new Error(`OpenCode API error: ${response.status} - ${errorText}`);
     }
 
     const data: OpenCodeResponse = await response.json();
     
     if (data.error) {
       console.error("OpenCode error:", data.error);
-      return getFallbackResponse(prompt);
+      throw new Error(`OpenCode error: ${data.error.message}`);
     }
 
     const text = data.choices?.[0]?.message?.content;
     if (!text) {
-      return getFallbackResponse(prompt);
+      throw new Error("No response from OpenCode - empty response");
     }
 
     return text;
   } catch (error: any) {
     console.error("Failed to call OpenCode:", error.message);
-    return getFallbackResponse(prompt);
+    throw error;
   }
-}
-
-// Fallback responses when AI is unavailable
-function getFallbackResponse(prompt: string): string {
-  const lower = prompt.toLowerCase();
-  
-  if (lower.includes("socratic") || lower.includes("question")) {
-    return "That's a great question! Let me ask you this: What do you think happens when you push an object?";
-  }
-  
-  if (lower.includes("teach") || lower.includes("explain")) {
-    return "Let me explain! Think of force like a push or pull. When you push a shopping cart, it moves because you're applying force to it. The more force you apply, the faster it moves!";
-  }
-  
-  if (lower.includes("quiz")) {
-    return "1. What is Force equals?\n   a) mass × acceleration\n   b) mass + acceleration\n   c) mass / acceleration\n   d) mass - acceleration";
-  }
-  
-  if (lower.includes("feynman")) {
-    return "Great try! Try explaining it like you're teaching a 10-year-old: 'Force is like a push or pull that makes things move or stop. When you kick a ball, you're putting force on it!'";
-  }
-  
-  return "I'm here to help you learn! Let's explore this together.";
 }
 
 // Alias for backward compatibility
 export const callGemini = callAI;
 
-// Socratic prompting - never give direct answers
-export function buildSocraticPrompt(
-  userMessage: string,
-  topic: string,
-  userPriorKnowledge: string | null
-): string {
-  return `You are Clawppy, an AI tutor for Indian students (Grades 9-12, NEET/JEE prep).
+// Build onboarding introduction prompt
+export function buildIntroPrompt(name: string): string {
+  return `You are Clawppy, an AI study buddy for Indian students (CBSE Class 9-12).
 
-CORE RULE: Never give direct answers. Always teach through questions.
+Your name is Clawppy (like "claw" + "ppy" - friendly and helpful).
 
-Current topic: ${topic}
+Your task is to introduce yourself to a new student. Keep it:
+- Short and friendly (under 100 words)
+- Explain you don't give answers - you teach HOW to solve
+- Mention you help with CBSE syllabus (Class 9-12)
+- End by asking which class they're in
+- Use some emojis but not too many
+- In Hindi-English mix if natural
 
-${userPriorKnowledge ? `Student's prior knowledge: ${userPriorKnowledge}` : ""}
-
-Student asks: "${userMessage}"
-
-Respond with a Socratic question that:
-1. Connects to what they might already know
-2. Breaks the problem into smaller pieces
-3. Guides them to discover the answer themselves
-
-Keep it short (1-2 sentences), friendly, and in Hindi-English mix if appropriate.
-Response in English.`;
+Write the introduction message.`;
 }
 
-// Build confidence calibration quiz prompt
-export function buildConfidenceQuizPrompt(topic: string, concepts: string[]): string {
-  return `Generate 3 quick quiz questions to check understanding of "${topic}".
+// Build syllabus selection prompt
+export function buildSyllabusOptionsPrompt(): string {
+  return `Generate a message that shows CBSE syllabus options for the user to choose.
 
-Concepts to test: ${concepts.join(", ")}
+Format as numbered list with class options:
+1. CBSE Class 9
+2. CBSE Class 10
+3. CBSE Class 11
+4. CBSE Class 12
+5. NEET/JEE Prep
+6. CBSE Class 11 Science
+7. CBSE Class 12 Science
 
-Format as JSON array:
-[
-  {
-    "question": "question text",
-    "options": ["option A", "option B", "option C", "option D"],
-    "correctIndex": 0,
-    "explanation": "brief explanation"
-  }
-]
-
-Only return the JSON, no other text. Questions should be conceptual (not just recall).`;
+Keep it short and friendly.`;
 }
 
-// Feynman evaluation prompt
+// Build assessment prompt - intelligent questions, not quiz
+export function buildAssessmentPrompt(topic: string, userLevel: string, questionNumber: number, previousAnswers: string[]): string {
+  const prevContext = previousAnswers.length > 0 
+    ? `\nPrevious interaction:\n${previousAnswers.map((a, i) => `${i+1}. ${a}`).join("\n")}`
+    : "";
+
+  return `You are conducting an interactive assessment for a CBSE ${userLevel} student on the topic: "${topic}".
+
+MISSION: 
+Don't just test facts. Test depth. We need to see if they actually understand the logic or just memorized it.
+
+This is question ${questionNumber} of 5.
+
+STRATEGY:
+- If they answered previous questions well, make this one harder or conceptual.
+- If they struggled, ask a fundamental question to find where the breakdown is.
+- Use a scenario-based question (e.g., "What happens if we change X in this formula?").
+
+${prevContext}
+
+Ask ONE sharp, open-ended question. No multiple choice. Keep it conversational.`;
+}
+
+// Build assessment analysis prompt
+export function buildAssessmentAnalysisPrompt(answers: string[]): string {
+  return `Analyze these 5 assessment answers from a student. 
+  
+Answers:
+${answers.map((a, i) => `${i+1}. ${a}`).join("\n")}
+
+Categorize their knowledge into 4 buckets (must sum to 100%):
+1. Actually Know: Correct answers with clear logic.
+2. False Confidence: Answers given with confidence but contain conceptual errors.
+3. Unknown (Aware): Student admitted they don't know or gave very vague answers.
+4. Blind Spots: Subtle misconceptions revealed in their logic.
+
+Also identify the top 3 sub-topics they need to work on.
+
+Respond ONLY in JSON:
+{
+  "actualKnown": number,
+  "falseConfidence": number,
+  "unknownAware": number,
+  "blindSpots": number,
+  "topGaps": ["gap1", "gap2", "gap3"]
+}`;
+}
+
+// Build understanding graph prompt
+export function buildGraphPrompt(assessmentResults: any): string {
+  return `Generate a simple text-based visualization of a student's understanding.
+
+Data:
+- Actually Know: ${assessmentResults.actualKnown || 0}%
+- False Confidence: ${assessmentResults.falseConfidence || 0}%
+- Unknown Aware: ${assessmentResults.unknownAware || 0}%
+- Blind Spots: ${assessmentResults.blindSpots || 0}%
+
+Format as:
+📊 YOUR UNDERSTANDING
+━━━━━━━━━━━━━━━━━━━━━━
+✅ Know: XX%
+🎭 Don't Know You Know: XX%
+🟡 Don't Know (Aware): XX%
+❓ Blind Spots: XX%
+
+Keep it simple and visual.`;
+}
+
+// Build learning plan prompt
+export function buildLearningPlanPrompt(assessmentResults: any, topic: string): string {
+  return `Based on the assessment results, create a learning plan for "${topic}".
+
+Assessment:
+- Know: ${assessmentResults.actualKnown || 0}%
+- False Confidence: ${assessmentResults.falseConfidence || 0}%
+- Unknown Aware: ${assessmentResults.unknownAware || 0}%
+- Blind Spots: ${assessmentResults.blindSpots || 0}%
+
+Create a prioritized learning plan:
+1. What to tackle first (blind spots)
+2. What to fix (false confidence)
+3. What to build on (what they know)
+
+Format as numbered list with brief explanations.
+Keep it actionable.`;
+}
+
+// Build teaching prompt - interactive, not content bluff
+export function buildTeachingPrompt(topic: string, subtopic: string, gaps: string[], currentUnderstanding: number): string {
+  return `You are teaching a CBSE student about "${topic}" - specifically "${subtopic}".
+
+Their current understanding level: ${currentUnderstanding}%
+
+Known gaps to address: ${gaps.join(", ") || "none identified yet"}
+
+Teaching approach (IMPORTANT):
+- NOT content dumping or bluff
+- Build mental models they can use to solve ANY similar problem
+- Teach the PROBLEM-SOLVING APPROACH, not just the answer
+- Use simple examples they can relate to
+- Give them CONFIDENCE through mastery
+- At the end, ask them to try a problem themselves
+
+Keep explanation under 150 words. Make them feel capable.`;
+}
+
+// Build Feynman evaluation prompt
 export function buildFeynmanPrompt(concept: string, userExplanation: string): string {
-  return `You are evaluating a student's ability to explain a concept simply (Feynman technique).
+  return `You are evaluating a CBSE student's Feynman technique attempt.
 
-Concept: ${concept}
+Concept they need to explain: ${concept}
 
 Student's explanation:
 "${userExplanation}"
 
-Evaluate based on:
-1. Simplicity (no jargon, easy to understand)
-2. Core concepts present (accuracy)
-3. Gaps or misconceptions
+Evaluate:
+1. Can a 10-year-old understand it? (simplicity)
+2. Are core concepts accurate? (accuracy)
+3. Did they use too much jargon? (clarity)
 
 Respond in JSON:
 {
   "score": 0-100,
-  "feedback": "specific feedback on what's good and what's missing",
-  "missingConcepts": ["concept1", "concept2"],
-  "passed": true/false
+  "passed": true/false,
+  "feedback": "what they did well and what to improve",
+  "gaps": ["specific gap 1", "gap 2"],
+  "nextSteps": "what to do next"
 }
 
 Only return JSON.`;
 }
 
-// Teaching prompt after quiz
-export function buildTeachingPrompt(topic: string, userAttempt: string, gaps: string[]): string {
-  return `Teach the concept of "${topic}" to a student.
+// Build review/continuation prompt
+export function buildContinuePrompt(hasPlan: boolean, nextTopic: string | null): string {
+  if (!hasPlan) {
+    return `Generate a friendly message asking what the student wants to learn next.
+    
+Options:
+- Start a new topic
+- Continue from where they left
+- Practice questions
+- Check their progress
 
-The student tried: "${userAttempt}"
+Keep it short and give numbered options.`;
+  }
 
-Known gaps to address: ${gaps.join(", ")}
+  return `Generate a message for a returning student.
 
-Rules:
-1. Start from what they already know
-2. Build up gradually
-3. Use simple examples
-4. At the end, ask "Does this make sense?"
-5. Do NOT give the final answer to any problem - let them work through it
+They have a learning plan in progress.
+Next topic to cover: ${nextTopic || "continue from plan"}
 
-Keep explanation under 150 words.
-Use Hindi-English mix if it helps understanding.`;
+Options to show:
+1. Continue learning
+2. Review previous topic
+3. Practice questions
+4. Check progress (/map)
+
+Keep it short and friendly.`;
 }
 
-// Generate practice questions
-export function buildPracticePrompt(subject: string, topic: string, count: number = 5): string {
-  return `Generate ${count} practice questions for ${subject} - ${topic}.
+// Build practice questions prompt
+export function buildPracticePrompt(topic: string, subtopic: string, difficulty: string = "medium"): string {
+  return `Generate 3 practice questions for CBSE "${topic}" - ${subtopic}.
+
+Difficulty: ${difficulty}
 
 Include:
-- 2 easy questions (conceptual)
-- 2 medium questions (application)
-- 1 hard question (analysis)
+- 1 conceptual question (check understanding)
+- 1 application question (use concepts to solve)
+- 1 problem-solving question (multi-step)
 
-Format as numbered list with options (a, b, c, d).
+Format as numbered list with options (a-d).
 Include answer key at the end.
-Mark the correct answer with *.`;
-}
-
-// Knowledge map generation
-export function buildKnowledgeMapPrompt(topics: any[]): string {
-  return `Generate a knowledge map for the student based on their topic progress.
-
-Topics:
-${topics.map(t => `- ${t.topic} (${t.subject}): score ${t.masteryScore}%, status ${t.status}, false confidence: ${t.falseConfidenceDetected}`).join("\n")}
-
-Format as:
-📚 YOUR KNOWLEDGE MAP
-
-✅ MASTERED (score > 85%)
-- topic1
-- topic2
-
-🟡 LEARNING (score 50-85%)
-- topic3
-
-🔴 NEEDS WORK (score < 50%)
-- topic4
-
-⚠️ FALSE CONFIDENCE DETECTED
-- topic5 (rated high but scored low)
-
-Total topics: X | Streak: Y days
-`;
+Mark correct answer with *.`;
 }
